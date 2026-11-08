@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtuella Pythonmiljöer
+.venv/
+venv/
+env/
+
+# Byggfiler
+build/
+dist/
+*.egg-info/
+
+# Test- och cachefiler
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# Utvecklingsmiljöer
+.vscode/
+.idea/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Tillfälliga filer
+*.tmp
+*.bak
+*~
