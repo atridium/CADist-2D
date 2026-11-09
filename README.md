@@ -1,8 +1,22 @@
 # CADist 2D
 
-CADist 2D är ett 2D-ritprogram i Python med PySide6 och DXF-stöd.
+**Version 0.1.0 Beta – under utveckling**
 
-> **Status:** Utvecklingsversion 0.1.0. Funktionerna för DXF-import/export, block och lager är inte fullständigt verifierade. Använd kopior av viktiga ritningar vid provning.
+CADist 2D är ett öppet 2D-ritprogram i Python med PySide6 och stöd för DXF-formatet.
+
+Projektet finns på GitHub: https://github.com/atridium/CADist-2D
+
+## Viktig information – Betaversion
+
+CADist 2D är under utveckling och kan innehålla fel eller ofullständiga funktioner.
+
+Programmet tillhandahålls i befintligt skick, utan garantier, och används på egen risk.
+
+Fel kan påverka ritningars geometri, innehåll, måttsättning och andra uppgifter samt orsaka förlust av data.
+
+Använd alltid säkerhetskopior av originalfiler och kontrollera att ritningar och exporterade filer är korrekta innan de används eller distribueras.
+
+CADist 2D distribueras under MIT-licensen.
 
 ## Installation och start
 
@@ -15,7 +29,7 @@ py cadist_2d.py
 
 ## Bidra
 
-Förslag och kodändringar är välkomna genom GitHub Issues och Pull Requests. Skapa gärna en separat gren eller fork och beskriv vad ändringen gör. Projektets huvudgren bör skyddas med krav på Pull Request innan sammanslagning.
+Förbättringsförslag, felrapporter och kodändringar är välkomna via GitHub Issues och Pull Requests.
 
 ## Licens
 
