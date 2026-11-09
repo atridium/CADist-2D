@@ -3016,7 +3016,7 @@ class DrawingApp(QMainWindow):
         tb = QHBoxLayout(self.titlebar)
         tb.setContentsMargins(10, 0, 0, 0)
         tb.setSpacing(0)
-        self.title = QLabel("CADist 2D – utan namn")
+        self.title = QLabel("CADist 2D Beta – utan namn")
         tb.addWidget(self.title)
         tb.addStretch()
 
@@ -4715,14 +4715,14 @@ class DrawingApp(QMainWindow):
         """Ritningen ar nu sparad, och titeln visar det."""
         self.canvas.changed = False
         namn = os.path.basename(self.path) if self.path else "utan namn"
-        self.title.setText(f"CADist 2D – {namn}")
+        self.title.setText(f"CADist 2D Beta – {namn}")
 
     def _mark_changed(self):
         """Titeln visar att nagot inte ar sparat."""
         if not self.canvas.changed:
             return
         namn = os.path.basename(self.path) if self.path else "utan namn"
-        self.title.setText(f"CADist 2D – {namn}  •")
+        self.title.setText(f"CADist 2D Beta – {namn}  •")
 
     def maybe_save(self):
         """Fragan som visas nar nagot inte ar sparat.
@@ -4819,7 +4819,7 @@ class DrawingApp(QMainWindow):
         self.canvas.entities = parsed
         self.path = path
         self.canvas.changed = False
-        self.title.setText(f"CADist 2D – {os.path.basename(path)}")
+        self.title.setText(f"CADist 2D Beta – {os.path.basename(path)}")
         self.canvas.update()
         self._update_zoom()
         self._update_history_buttons()
@@ -4855,9 +4855,21 @@ class DrawingApp(QMainWindow):
     def about(self):
         QMessageBox.information(
             self, "Om CADist 2D",
-            "CADist 2D\n\n"
-            "Ett slimmat 2D-ritprogram för DXF.\n"
-            "Byggt med PySide6 (Qt) och Python.")
+            "CADist 2D – Version 0.1.0 Beta\n\n"
+            "Ett 2D-ritprogram med stöd för DXF.\n"
+            "Byggt med Python och PySide6 (Qt).\n\n"
+            "GitHub: https://github.com/atridium/CADist-2D\n\n"
+            "Viktig information – Betaversion\n\n"
+            "CADist 2D är under utveckling och kan innehålla fel eller "
+            "ofullständiga funktioner.\n\n"
+            "Programmet tillhandahålls i befintligt skick, utan garantier, "
+            "och används på egen risk.\n\n"
+            "Fel kan påverka ritningars geometri, innehåll, måttsättning "
+            "och andra uppgifter samt orsaka förlust av data.\n\n"
+            "Använd alltid säkerhetskopior av originalfiler och kontrollera "
+            "att ritningar och exporterade filer är korrekta innan de "
+            "används eller distribueras.\n\n"
+            "CADist 2D distribueras under MIT-licensen.")
 
 
 # ==========================================================================
