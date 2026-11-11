@@ -4816,6 +4816,8 @@ class DrawingApp(QMainWindow):
             return
 
         self.canvas.entities = parsed
+        self._build_symbol_menu()
+        self._fill_block_menu()
         self.path = path
         self.canvas.changed = False
         self.title.setText(f"CADist 2D Beta – {os.path.basename(path)}")
@@ -5010,7 +5012,7 @@ def build_entity(kind, data, entities, blocks, defnum):
     elif kind == "LWPOLYLINE":
         xs = [defnum(v) for c, v in data if c == 10]
         ys = [defnum(v) for c, v in data if c == 20]
-        closed = any(c == 70 and int(defnum(v)) == 1 for c, v in data)
+        closed = any(c == 70 and (int(defnum(v)) & 1) != 0 for c, v in data)
         pts = [QPointF(x, y) for x, y in zip(xs, ys)]
         if len(pts) >= 2:
             if closed and len(pts) == 5 and pts[0] == pts[-1]:
