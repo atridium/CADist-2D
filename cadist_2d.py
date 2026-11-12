@@ -2860,8 +2860,12 @@ class Canvas(QWidget):
         out += ["0", "SECTION", "2", "TABLES",
                 "0", "TABLE", "2", "LAYER", "70", str(len(self.layers))]
         for lag in self.layers:
-            out += ["0", "LAYER", "2", lag.name, "70", "0",
-                    "62", str(cad_index(lag.color) if lag.color else 7),
+            # DXF: flagga 4 = låst, negativ ACI-färg = släckt lager.
+            # Färgindex 7 används för lager utan särskild färg.
+            aci = cad_index(lag.color) if lag.color else 7
+            out += ["0", "LAYER", "2", lag.name,
+                    "70", "4" if lag.locked else "0",
+                    "62", str(aci if lag.visible else -aci),
                     "6", "CONTINUOUS"]
         out += ["0", "ENDTAB", "0", "ENDSEC"]
 
@@ -4816,6 +4820,12 @@ class DrawingApp(QMainWindow):
             return
 
         self.canvas.entities = parsed
+        self.canvas.layers = parse_dxf_layers(text, parsed)
+        self.canvas.active_layer = DEFAULT_LAYER
+        self.canvas.selection = []
+        self.canvas.history.clear()
+        self.canvas.future.clear()
+        self._after_layer_change()
         self._build_symbol_menu()
         self._fill_block_menu()
         self.path = path
@@ -4876,6 +4886,75 @@ class DrawingApp(QMainWindow):
 # ==========================================================================
 # Läsning av DXF
 # ==========================================================================
+def parse_dxf_layers(text, entities=()):
+    """Läs DXF:s LAYER-tabell och säkerställ att objektens lager finns.
+
+    Enbart tabellen i TABLES behandlas; lagernamn i BLOCKS/ENTITIES
+    ska inte tolkas som lagerdefinitioner. R12-färgindex (ACI) stöds.
+    """
+    lines = text.splitlines()
+    pairs = []
+    for i in range(0, len(lines) - 1, 2):
+        try:
+            code = int(lines[i].strip())
+        except ValueError:
+            continue
+        pairs.append((code, lines[i + 1].strip()))
+
+    layers = []
+    names = set()
+    section = None
+    table = None
+    i = 0
+    while i < len(pairs):
+        code, value = pairs[i]
+        if (code, value) == (0, "SECTION"):
+            section = pairs[i + 1][1] if i + 1 < len(pairs) and pairs[i + 1][0] == 2 else None
+            table = None
+        elif (code, value) == (0, "ENDSEC"):
+            section = None
+            table = None
+        elif section == "TABLES" and (code, value) == (0, "TABLE"):
+            table = pairs[i + 1][1] if i + 1 < len(pairs) and pairs[i + 1][0] == 2 else None
+        elif section == "TABLES" and (code, value) == (0, "ENDTAB"):
+            table = None
+        elif section == "TABLES" and table == "LAYER" and (code, value) == (0, "LAYER"):
+            data = []
+            i += 1
+            while i < len(pairs) and pairs[i][0] != 0:
+                data.append(pairs[i])
+                i += 1
+            name = next((v for c, v in data if c == 2 and v), None)
+            if name and name not in names:
+                try:
+                    flags = int(next((v for c, v in data if c == 70), "0"))
+                except ValueError:
+                    flags = 0
+                try:
+                    aci = int(next((v for c, v in data if c == 62), "7"))
+                except ValueError:
+                    aci = 7
+                # Negativ färg = avstängt lager. Fryst lager (flagga 1)
+                # behandlas också som osynligt i CADist 2D.
+                color = DXF_INDEX_COLORS.get(abs(aci))
+                layers.append(Layer(name, color,
+                                    visible=aci >= 0 and not bool(flags & 1),
+                                    locked=bool(flags & 4)))
+                names.add(name)
+            continue
+        i += 1
+
+    if DEFAULT_LAYER not in names:
+        layers.insert(0, Layer(DEFAULT_LAYER, None, True))
+        names.add(DEFAULT_LAYER)
+    for ent in entities:
+        name = ent.layer or DEFAULT_LAYER
+        if name not in names:
+            layers.append(Layer(name, None, True))
+            names.add(name)
+    return layers
+
+
 def parse_dxf(text, blocks):
     """Läs modellobjekt och blockdefinitioner ur rätt DXF-sektion.
 
