@@ -2842,11 +2842,10 @@ class Canvas(QWidget):
         if blocks_in_use:
             out += ["0", "SECTION", "2", "BLOCKS"]
             for blk in blocks_in_use:
-                x0, y0, x1, y1 = blk.bounds()
                 out += ["0", "BLOCK", "8", "0",
                         "2", blk.name,
                         "70", "0",
-                        "10", fmt(x0), "20", fmt(y0), "30", "0",
+                        "10", "0", "20", "0", "30", "0",
                         "3", blk.name, "1", ""]
                 for e in blk.entities:
                     name, pairs = e.dxf()
@@ -4817,6 +4816,8 @@ class DrawingApp(QMainWindow):
             return
 
         self.canvas.entities = parsed
+        self._build_symbol_menu()
+        self._fill_block_menu()
         self.path = path
         self.canvas.changed = False
         self.title.setText(f"CADist 2D Beta – {os.path.basename(path)}")
@@ -4876,35 +4877,95 @@ class DrawingApp(QMainWindow):
 # Läsning av DXF
 # ==========================================================================
 def parse_dxf(text, blocks):
-    """Laser en DXF-fil med kanda entiteter. Returnerar en lista entiteter."""
-    lines = [l.strip() for l in text.splitlines()]
+    """Läs modellobjekt och blockdefinitioner ur rätt DXF-sektion.
+
+    Behåller samma returtyp (lista med entiteter) för öppna, xref och infoga.
+    Enbart ENTITIES är ritningsobjekt; BLOCKS är återanvändbara definitioner.
+    """
+    lines = text.splitlines()
     pairs = []
     for i in range(0, len(lines) - 1, 2):
         try:
-            code = int(lines[i])
+            code = int(lines[i].strip())
         except ValueError:
             continue
-        pairs.append((code, lines[i + 1]))
+        pairs.append((code, lines[i + 1].strip()))
 
     defnum = lambda v: float(v) if v else 0.0
+    known = {"LINE", "LWPOLYLINE", "CIRCLE", "ARC", "TEXT", "INSERT"}
 
-    entities = []
+    def read_objects(records, definitions):
+        result = []
+        i = 0
+        while i < len(records):
+            code, value = records[i]
+            if code == 0 and value in known:
+                j = i + 1
+                data = []
+                while j < len(records) and records[j][0] != 0:
+                    data.append(records[j])
+                    j += 1
+                build_entity(value, data, result, definitions, defnum)
+                i = j
+            else:
+                i += 1
+        return result
+
+    # Dela filen på DXF-sektioner så att HEADER/TABLES/BLOCKS
+    # aldrig kan misstas för entiteter i modellrymden.
+    sections = {}
     i = 0
     while i < len(pairs):
-        code, value = pairs[i]
-        if code == 0 and value in ("LINE", "LWPOLYLINE", "CIRCLE",
-                                   "ARC", "TEXT", "INSERT"):
-            kind = value
-            data = []
-            j = i + 1
-            while j < len(pairs) and pairs[j][0] != 0:
-                data.append(pairs[j])
-                j += 1
-            i = j
-            build_entity(kind, data, entities, blocks, defnum)
-        else:
+        if pairs[i] == (0, "SECTION") and i + 1 < len(pairs) and pairs[i + 1][0] == 2:
+            name = pairs[i + 1][1]
+            i += 2
+            content = []
+            while i < len(pairs) and pairs[i] != (0, "ENDSEC"):
+                content.append(pairs[i])
+                i += 1
+            sections.setdefault(name, []).extend(content)
+        i += 1
+
+    # Läs definitionerna först. Egna block måste finnas när en INSERT
+    # i ENTITIES ska kopplas till rätt definition.
+    definitions = {block.name: block for block in blocks}
+    raw_blocks = []
+    records = sections.get("BLOCKS", [])
+    i = 0
+    while i < len(records):
+        if records[i] != (0, "BLOCK"):
             i += 1
-    return entities
+            continue
+        i += 1
+        header = []
+        while i < len(records) and records[i][0] != 0:
+            header.append(records[i])
+            i += 1
+        name = next((v for c, v in header if c == 2), None)
+        base_x = next((defnum(v) for c, v in header if c == 10), 0.0)
+        base_y = next((defnum(v) for c, v in header if c == 20), 0.0)
+        contents = []
+        while i < len(records) and records[i] != (0, "ENDBLK"):
+            contents.append(records[i])
+            i += 1
+        if name:
+            block = BlockDef(name, [])
+            definitions[name] = block
+            raw_blocks.append((block, contents, base_x, base_y))
+        i += 1
+
+    for block, contents, base_x, base_y in raw_blocks:
+        block.entities = read_objects(contents, list(definitions.values()))
+        for entity in block.entities:
+            entity.translate(-base_x, -base_y)
+
+    # Bevara inlästa egna block för symbolmenyn och kommande sparningar.
+    for block, _, _, _ in raw_blocks:
+        existing = next((b for b in blocks if b.name == block.name), None)
+        if existing is None:
+            blocks.append(block)
+
+    return read_objects(sections.get("ENTITIES", []), list(definitions.values()))
 
 
 def read_common(data, defnum):
@@ -4940,27 +5001,32 @@ def build_entity(kind, data, entities, blocks, defnum):
         return [defnum(v) for c, v in data if c == 10]
 
     if kind == "LINE":
-        xs = [defnum(v) for c, v in data if c == 10]
-        ys = [defnum(v) for c, v in data if c == 20]
-        if len(xs) >= 2 and len(ys) >= 2:
-            entities.append(satt(Line(QPointF(xs[0], ys[0]),
-                                          QPointF(xs[1], ys[1]),
-                                          color=color, lw=lw)))
+        x0 = next((defnum(v) for c, v in data if c == 10), None)
+        y0 = next((defnum(v) for c, v in data if c == 20), None)
+        x1 = next((defnum(v) for c, v in data if c == 11), None)
+        y1 = next((defnum(v) for c, v in data if c == 21), None)
+        if None not in (x0, y0, x1, y1):
+            entities.append(satt(Line(QPointF(x0, y0), QPointF(x1, y1),
+                                      color=color, lw=lw)))
 
     elif kind == "LWPOLYLINE":
         xs = [defnum(v) for c, v in data if c == 10]
         ys = [defnum(v) for c, v in data if c == 20]
-        closed = any(c == 70 and int(defnum(v)) == 1 for c, v in data)
+        closed = any(c == 70 and (int(defnum(v)) & 1) != 0 for c, v in data)
         pts = [QPointF(x, y) for x, y in zip(xs, ys)]
         if len(pts) >= 2:
             if closed and len(pts) == 5 and pts[0] == pts[-1]:
                 entities.append(satt(Rect(pts[0], pts[2], color=color, lw=lw)))
-            elif closed and len(pts) == 4:
+            elif (closed and len(pts) == 4
+                  and len({p.x() for p in pts}) == 2
+                  and len({p.y() for p in pts}) == 2
+                  and all((a.x() == b.x()) != (a.y() == b.y())
+                          for a, b in zip(pts, pts[1:] + pts[:1]))):
                 xs_ = [p.x() for p in pts]
                 ys_ = [p.y() for p in pts]
                 entities.append(satt(Rect(QPointF(min(xs_), min(ys_)),
-                                              QPointF(max(xs_), max(ys_)),
-                                              color=color, lw=lw)))
+                                          QPointF(max(xs_), max(ys_)),
+                                          color=color, lw=lw)))
             else:
                 entities.append(satt(Polyline(pts, closed, color=color, lw=lw)))
 
